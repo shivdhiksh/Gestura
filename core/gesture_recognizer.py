@@ -46,6 +46,8 @@ class HandFeatures:
     is_fist: bool = False
     is_open_palm: bool = False
     is_four_fingers_up: bool = False
+    index_middle_dist: float = 1.0
+    index_middle_together: bool = False
 
 
 class GestureRecognizer:
@@ -124,6 +126,16 @@ class GestureRecognizer:
         ring_ext = euclidean_dist(r_tip, w_pt) > (euclidean_dist(r_pip, w_pt) + 0.10 * palm_size)
         pinky_ext = euclidean_dist(p_tip, w_pt) > (euclidean_dist(p_pip, w_pt) + 0.10 * palm_size)
 
+        # Index and middle proximity (two fingers together gesture)
+        d_im = euclidean_dist(i_tip, m_tip)
+        d_im_pip = euclidean_dist(i_pip, m_pip)
+        index_middle_together = (
+            index_ext
+            and middle_ext
+            and d_im < (0.38 * palm_size)
+            and d_im_pip < (0.32 * palm_size)
+        )
+
         # Pinch distances
         d_ti = euclidean_dist(t_tip, i_tip)
         d_tm = euclidean_dist(t_tip, m_tip)
@@ -180,6 +192,8 @@ class GestureRecognizer:
             is_fist=is_fist,
             is_open_palm=is_open_palm,
             is_four_fingers_up=is_four_fingers,
+            index_middle_dist=d_im,
+            index_middle_together=index_middle_together,
         )
 
     # Palm length (wrist -> middle MCP) at which the configured pinch thresholds were tuned.
@@ -302,6 +316,7 @@ class GestureRecognizer:
             if self._is_dragging:
                 self.actions.stop_drag()
                 self._is_dragging = False
+            self._scroll_anchor = None
             self.current_gesture_name = "OUTSIDE ACTIVE ZONE"
             return self.current_gesture_name
 
@@ -406,35 +421,69 @@ class GestureRecognizer:
                         return self.current_gesture_name
 
         # =====================================================================
-        # 4. TWO FINGERS (VERTICAL & HORIZONTAL SCROLLING)
+        # 4. TWO FINGERS TOGETHER (VERTICAL & HORIZONTAL SCROLLING)
+        # Gesture: Index and middle fingers extended close together (like image),
+        # ring and pinky curled into palm, thumb folded.
+        # Keeping fingers up scrolls UP continuously;
+        # Keeping fingers down scrolls DOWN continuously;
+        # Returning fingers to center/neutral stops scrolling.
         # =====================================================================
-        if (
+        is_two_finger_scroll = (
             self._is_gesture_enabled("scrolling")
             and features.index_extended
             and features.middle_extended
             and not features.ring_extended
             and not features.pinky_extended
+            and features.index_middle_together
             and features.thumb_index_dist > pinch_release_thr
-        ):
+            and features.thumb_middle_dist > pinch_release_thr
+        )
+
+        if is_two_finger_scroll:
             center_x = (features.index_tip[0] + features.middle_tip[0]) / 2.0
             center_y = (features.index_tip[1] + features.middle_tip[1]) / 2.0
 
-            if self._scroll_anchor is not None:
-                dx = center_x - self._scroll_anchor[0]
-                dy = self._scroll_anchor[1] - center_y  # Moving up scrolls up (positive)
-
-                deadzone = self.config.scroll_deadzone
-                send_dx = dx if abs(dx) > deadzone else 0.0
-                send_dy = dy if abs(dy) > deadzone else 0.0
-
-                if send_dx != 0.0 or send_dy != 0.0:
-                    multiplier = self.config.scroll_sensitivity * 18.0
-                    self.actions.scroll(send_dx * multiplier, send_dy * multiplier)
-                    self._scroll_anchor = (center_x, center_y)
-            else:
+            if self._scroll_anchor is None:
                 self._scroll_anchor = (center_x, center_y)
+                self.current_gesture_name = "TWO-FINGER SCROLL (READY)"
+                return self.current_gesture_name
 
-            self.current_gesture_name = "TWO-FINGER SCROLL"
+            anchor_x, anchor_y = self._scroll_anchor
+            # dy > 0 when fingers are higher than anchor (kept up)
+            dy = anchor_y - center_y
+            dx = center_x - anchor_x
+
+            deadzone = self.config.scroll_deadzone
+
+            # If fingers are within the neutral deadzone:
+            if abs(dy) <= deadzone and abs(dx) <= (deadzone * 1.5):
+                # Gently adapt anchor to current resting position while resting
+                self._scroll_anchor = (
+                    anchor_x * 0.90 + center_x * 0.10,
+                    anchor_y * 0.90 + center_y * 0.10,
+                )
+                self.current_gesture_name = "TWO-FINGER SCROLL (NEUTRAL)"
+                return self.current_gesture_name
+
+            # Outside deadzone: User is keeping fingers up or down!
+            send_dy = 0.0
+            if dy > deadzone:
+                send_dy = dy - deadzone
+                self.current_gesture_name = "SCROLL: UP (FINGERS UP)"
+            elif dy < -deadzone:
+                send_dy = dy + deadzone
+                self.current_gesture_name = "SCROLL: DOWN (FINGERS DOWN)"
+
+            send_dx = 0.0
+            if dx > (deadzone * 1.5):
+                send_dx = dx - (deadzone * 1.5)
+            elif dx < -(deadzone * 1.5):
+                send_dx = dx + (deadzone * 1.5)
+
+            # Continuous rate scroll: Dispatches while fingers are held up or down
+            multiplier = self.config.scroll_sensitivity * 12.0
+            self.actions.scroll(send_dx * multiplier, send_dy * multiplier)
+
             return self.current_gesture_name
         else:
             self._scroll_anchor = None

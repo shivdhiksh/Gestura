@@ -83,7 +83,7 @@ All gestures map directly to native Windows input events:
 | **Thumb + index pinch** | Left click | Win32 `mouse_event(MOUSEEVENTF_LEFTDOWN / UP)` |
 | **Hold thumb + index pinch (>0.35s)** | Drag and drop | Win32 `MOUSEEVENTF_LEFTDOWN` hold until pinch release |
 | **Thumb + middle pinch** | Right click | Win32 `mouse_event(MOUSEEVENTF_RIGHTDOWN / UP)` |
-| **Two fingers (index + middle)** | Vertical & horizontal scroll | Win32 `MOUSEEVENTF_WHEEL` & `MOUSEEVENTF_HWHEEL` |
+| **Two fingers together (index + middle close)** | Scroll Up (Fingers Up) / Down (Fingers Down) | Win32 `MOUSEEVENTF_WHEEL` continuous rate hold |
 | **Thumb up** | Increase volume | Win32 `keybd_event(VK_VOLUME_UP)` |
 | **Thumb down** | Decrease volume | Win32 `keybd_event(VK_VOLUME_DOWN)` |
 | **Three fingers (index + middle + ring)** | Adjust screen brightness | `screen-brightness-control` API (+/- 5%) |

@@ -375,7 +375,7 @@ class SettingsPanel(QFrame):
             ("left_click", "Thumb + index pinch", "Left click / Double click"),
             ("drag_and_drop", "Hold thumb + index pinch", "Drag and drop selection"),
             ("right_click", "Thumb + middle pinch", "Right click context menu"),
-            ("scrolling", "Two fingers (index + middle)", "Vertical and horizontal scroll"),
+            ("scrolling", "Two fingers together (Index+Middle)", "Scroll Up (Fingers Up) / Down (Fingers Down)"),
             ("volume_control", "Thumb up / Thumb down", "Increase / decrease volume"),
             ("brightness_control", "Three fingers (index+mid+ring)", "Screen brightness adjust"),
             ("media_controls", "Thumb + ring pinch", "Play / pause media playback"),

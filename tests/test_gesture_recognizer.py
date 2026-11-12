@@ -253,25 +253,58 @@ def test_two_finger_scrolling():
     actions = MockActionController()
     gr = GestureRecognizer(cfg, actions)
 
-    # Two fingers extended (index + middle)
+    # 1. Two fingers extended close together (index + middle) at y=0.40
     lms1 = create_synthetic_hand(
         index_pos=(0.50, 0.40), middle_pos=(0.52, 0.40),
         fingers_extended=(False, True, True, False, False)
     )
     f1 = gr.extract_features(lms1)
-    gr.update_gestures(f1, timestamp=1.0)
+    assert f1.index_middle_together is True
+    g1 = gr.update_gestures(f1, timestamp=1.0)
+    assert "SCROLL" in g1
 
-    # Move hand up to y=0.35 (delta = 0.05 > deadzone 0.01)
+    # 2. Move fingers up to y=0.35 (delta = 0.05 > deadzone 0.01)
     lms2 = create_synthetic_hand(
         index_pos=(0.50, 0.35), middle_pos=(0.52, 0.35),
         fingers_extended=(False, True, True, False, False)
     )
     f2 = gr.extract_features(lms2)
-    gr.update_gestures(f2, timestamp=1.033)
-
-    assert len(actions.scroll_events) >= 1
-    # dy is positive when moving up (scroll up)
+    g2 = gr.update_gestures(f2, timestamp=1.033)
+    assert g2 == "SCROLL: UP (FINGERS UP)"
+    assert len(actions.scroll_events) == 1
     assert actions.scroll_events[-1][1] > 0
+
+    # 3. KEEP fingers up at y=0.35 -> continuous scrolling up!
+    g3 = gr.update_gestures(f2, timestamp=1.066)
+    assert g3 == "SCROLL: UP (FINGERS UP)"
+    assert len(actions.scroll_events) == 2
+    assert actions.scroll_events[-1][1] > 0
+
+    # 4. Return fingers to neutral resting position (y=0.40) -> stops scrolling
+    g_neutral = gr.update_gestures(f1, timestamp=1.100)
+    assert g_neutral == "TWO-FINGER SCROLL (NEUTRAL)"
+    assert len(actions.scroll_events) == 2  # No new scroll dispatched
+
+    # 5. Move/KEEP fingers DOWN (y=0.46 -> dy = -0.06 < -0.01) -> scrolls down!
+    lms_down = create_synthetic_hand(
+        index_pos=(0.50, 0.46), middle_pos=(0.52, 0.46),
+        fingers_extended=(False, True, True, False, False)
+    )
+    f_down = gr.extract_features(lms_down)
+    g_down = gr.update_gestures(f_down, timestamp=1.133)
+    assert g_down == "SCROLL: DOWN (FINGERS DOWN)"
+    assert len(actions.scroll_events) == 3
+    assert actions.scroll_events[-1][1] < 0
+
+    # 6. Fingers spread wide apart (peace/V sign) -> NOT recognized as two fingers together
+    lms_spread = create_synthetic_hand(
+        index_pos=(0.40, 0.35), middle_pos=(0.60, 0.35),
+        fingers_extended=(False, True, True, False, False)
+    )
+    f_spread = gr.extract_features(lms_spread)
+    assert f_spread.index_middle_together is False
+    g_spread = gr.update_gestures(f_spread, timestamp=1.166)
+    assert "SCROLL" not in g_spread
 
 
 def test_volume_controls():
